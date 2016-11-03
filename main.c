@@ -10,7 +10,7 @@
 #pragma config WDTE = OFF        // Watchdog Timer Enable bit (WDT enabled)
 #pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
 #pragma config MCLRE = ON       // RA5/MCLR/VPP Pin Function Select bit (RA5/MCLR/VPP pin function is MCLR)
-#pragma config BOREN = OFF      // Brown-out Reset Enable bit (BOR disabled)
+#pragma config BOREN = ON      // Brown-out Reset Enable bit (BOR disabled)
 #pragma config LVP = OFF        // Low-Voltage Programming Enable bit (RB3 is digital I/O, HV on MCLR must be used for programming)
 #pragma config CPD = OFF        // Data EE Memory Code Protection bit (Code protection off)
 #pragma config WRT = OFF        // Flash Program Memory Write Enable bits (Write protection off)
@@ -25,56 +25,64 @@
 // Use project enums instead of #define for ON and OFF.
 
 #include <xc.h>
+#include "I2C_d.h"
 
 void init(void);
+
+char command_i2c, tmp;
+
+ static void interrupt isr(void)
+{
+    PORTAbits.RA6 = 0;
+    GIE = 0;
+    
+    if (PIR1bits.SSPIF)
+    {
+        tmp = SSPBUF;
+        if (SSPSTATbits.D_nA)
+            command_i2c = tmp;
+            
+        PIR1bits.SSPIF = 0;
+    }
+    
+    GIE = 1;
+    //PORTAbits.RA6 = 0;
+}
 
 void main(void) {
     
     init();
     
+    
+    
     PORTBbits.RB0 = 0;
     PORTBbits.RB2 = 0;
     PORTBbits.RB5 = 0;
     PORTAbits.RA7 = 0;
-    PORTAbits.RA6 = 0;
+    PORTAbits.RA6 = 1;
     
-    __delay_ms(3000);
+    //__delay_ms(5000);
     
+    I2C_init(I2C_ADDR);
+    PEIE = 1;
+    GIE = 1;
     
     while(1)
     {
-        
-    PORTBbits.RB0 = 0;
-    PORTBbits.RB2 = 0;
-    PORTBbits.RB5 = 0;
-    PORTAbits.RA7 = 1;
-    PORTAbits.RA6 = 1;
-    
-    __delay_ms(500);
-    
-    PORTBbits.RB0 = 0;
-    PORTBbits.RB2 = 0;
-    PORTBbits.RB5 = 1;
-    PORTAbits.RA7 = 0;
-    PORTAbits.RA6 = 0;
-    
-    __delay_ms(500);
-    
-    PORTBbits.RB0 = 0;
-    PORTBbits.RB2 = 1;
-    PORTBbits.RB5 = 0;
-    PORTAbits.RA7 = 0;
-    PORTAbits.RA6 = 1;
-    
-    __delay_ms(500);
-    
-    PORTBbits.RB0 = 1;
-    PORTBbits.RB2 = 0;
-    PORTBbits.RB5 = 0;
-    PORTAbits.RA7 = 0;
-    PORTAbits.RA6 = 0;
-    
-    __delay_ms(500);
+        if (command_i2c)
+        {
+            if (command_i2c & 0x01)
+                PORTBbits.RB0 = 1;
+            else
+                PORTBbits.RB0 = 0;
+            
+            if (command_i2c & 0x02)
+                PORTBbits.RB2 = 1;
+            else
+                PORTBbits.RB2 = 0;
+            
+            command_i2c = 0;
+        }
     }
     
     
@@ -91,4 +99,5 @@ void init(void)
     TRISBbits.TRISB5 = 0;
     TRISAbits.TRISA7 = 0;
     TRISAbits.TRISA6 = 0;
+    
 }
