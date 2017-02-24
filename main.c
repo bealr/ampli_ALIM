@@ -29,19 +29,29 @@
 
 void init(void);
 
-char command_i2c, tmp;
+char i2c_trame[5];
+char pointer_i2c;
+char soft_interrupt;
 
  static void interrupt isr(void)
 {
     PORTAbits.RA6 = 0;
     GIE = 0;
     
-    if (PIR1bits.SSPIF)
+    if (PIR1bits.SSPIF) // only write is gerède
     {
-        tmp = SSPBUF;
-        if (SSPSTATbits.D_nA)
-            command_i2c = tmp;
+        if (SSPSTATbits.S) {
+            pointer_i2c = 0;
+        }
+        
+        *(i2c_trame+pointer_i2c) = SSPBUF;
+        pointer_i2c++;
             
+        if (SSPSTATbits.P) {
+            if (*(i2c_trame) == I2C_ADDR)
+                soft_interrupt |= 0x01;
+        }
+        
         PIR1bits.SSPIF = 0;
     }
     
@@ -52,16 +62,14 @@ char command_i2c, tmp;
 void main(void) {
     
     init();
+    pointer_i2c = 0;
+    soft_interrupt = 0;
     
-    
-    
-    PORTBbits.RB0 = 0;
-    PORTBbits.RB2 = 0;
-    PORTBbits.RB5 = 0;
-    PORTAbits.RA7 = 0;
+    PORTBbits.RB0 = 0; // puissance
+    PORTBbits.RB2 = 0; // puissance 
+    PORTBbits.RB5 = 0; // preamp
+    PORTAbits.RA7 = 0; // preamp
     PORTAbits.RA6 = 1;
-    
-    //__delay_ms(5000);
     
     I2C_init(I2C_ADDR);
     PEIE = 1;
@@ -69,19 +77,35 @@ void main(void) {
     
     while(1)
     {
-        if (command_i2c)
-        {
-            if (command_i2c & 0x01)
-                PORTBbits.RB0 = 1;
-            else
-                PORTBbits.RB0 = 0;
+        if (soft_interrupt) {
             
-            if (command_i2c & 0x02)
-                PORTBbits.RB2 = 1;
-            else
-                PORTBbits.RB2 = 0;
-            
-            command_i2c = 0;
+            if (soft_interrupt & 0x01) {
+                soft_interrupt &= 0xFE;
+                
+                if (*(i2c_trame + 1) == 0x00) { // puissance
+                    if (*(i2c_trame + 2) == 0x00) {
+                        PORTBbits.RB0 = 0; // puissance
+                        PORTBbits.RB2 = 0; // puissance 
+                    }
+                    
+                    if (*(i2c_trame + 2) == 0x01) {
+                        PORTBbits.RB0 = 1; // puissance
+                        PORTBbits.RB2 = 1; // puissance 
+                    }
+                }
+                
+                if (*(i2c_trame + 1) == 0x01) { // preamp
+                    if (*(i2c_trame + 2) == 0x00) {
+                        PORTBbits.RB5 = 0; // preamp
+                        PORTAbits.RA7 = 0; // preamp
+                    }
+                    
+                    if (*(i2c_trame + 2) == 0x01) {
+                        PORTBbits.RB5 = 1; // preamp
+                        PORTAbits.RA7 = 1; // preamp
+                    }
+                }
+            }
         }
     }
     
